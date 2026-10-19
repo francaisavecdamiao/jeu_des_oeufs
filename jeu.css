@@ -121,3 +121,31 @@ body.host .ranking-grande .rank-list{ gap:10px; }
 /* botão de fala na barra de abas */
 .aba-fala{ flex:0 0 auto; padding-left:14px; padding-right:14px; }
 .aba-fala:not(.on){ color:var(--text-light); border-color:var(--border); }
+
+/* ---------- BALÃO DE TRADUÇÃO ---------- */
+.voc.ativo{ background:color-mix(in srgb, var(--c) 28%, #fff); }
+.balao{
+  --c:#48B832;
+  position:absolute; z-index:50;
+  max-width:min(300px, calc(100vw - 16px)); width:max-content;
+  background:#fff; color:var(--text);
+  border:3px solid var(--c); border-radius:14px;
+  padding:9px 13px; text-align:left;
+  box-shadow:0 8px 20px rgba(0,0,0,.18);
+  font-size:15px; line-height:1.4;
+  animation:popIn .15s ease;
+}
+.balao-termo{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--text-light); }
+.balao-trad{ font-weight:800; font-size:16px; }
+.balao-custo{ margin-top:3px; font-size:12px; font-weight:800; color:var(--vermelho-dark); }
+.balao-seta{
+  position:absolute; bottom:-9px; width:14px; height:14px;
+  background:#fff; border-right:3px solid var(--c); border-bottom:3px solid var(--c);
+  transform:translateX(-50%) rotate(45deg);
+}
+.balao.abaixo .balao-seta{
+  bottom:auto; top:-9px;
+  border-right:none; border-bottom:none;
+  border-left:3px solid var(--c); border-top:3px solid var(--c);
+}
+.legenda-item{ min-width:34px; }
