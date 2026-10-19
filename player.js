@@ -62,6 +62,7 @@ function listaDe(x){
    RENDER
    ========================================================= */
 function render(){
+  fecharBalao();
   renderTopbar();
   const c = document.getElementById('content');
   if(PAGE === 'entrada'){ c.innerHTML = telaPin(); focarPin(); return; }
@@ -302,10 +303,9 @@ function trocarAba(a){ if(P.aba === a) return; playSound('click'); P.aba = a; re
 /* =========================================================
    FALA — lê o termo em francês a cada clique (só se ativada)
    velocidade: 60% da anterior (0.9 × 0.6 = 0.54)
-   atraso: 1,5 s depois do clique
+   sem atraso: fala no instante do clique
    ========================================================= */
 const FALA_VELOCIDADE = 0.54;
-const FALA_ATRASO_MS  = 1500;
 let falaTimer = null;
 
 function vozFrancesa(){
@@ -333,15 +333,10 @@ function falarAgora(texto){
   }catch(e){}
 }
 
-/* agenda a fala para 1,5 s depois do clique; um novo clique reinicia a contagem */
+/* fala na hora, no clique (só se a fala estiver ativada) */
 function falar(texto){
   if(!P.fala || !window.speechSynthesis || !texto) return;
-  if(falaTimer){ clearTimeout(falaTimer); falaTimer = null; }
-  falaTimer = setTimeout(() => {
-    falaTimer = null;
-    if(!P.fala) return;                     // foi desativada durante a espera
-    falarAgora(texto);
-  }, FALA_ATRASO_MS);
+  falarAgora(texto);
 }
 
 function alternarFala(){
@@ -363,37 +358,73 @@ function htmlTexto(pi){
   const rev = P.revelados[pi] || {};
   return segs.map(s => {
     if(s.v === null) return esc(s.t);
-    return `<span class="voc${rev[s.v] ? ' aberto' : ''}" style="--c:${corNivel(vocab[s.v].nivel)}" onclick="clicarVoc(${s.v})">${esc(s.t)}</span>`;
+    return `<span class="voc${rev[s.v] ? ' aberto' : ''}" style="--c:${corNivel(vocab[s.v].nivel)}" onclick="clicarVoc(${s.v}, this)">${esc(s.t)}</span>`;
   }).join('');
 }
 
+/* legenda: cada cor mostra quantos ovos custa o primeiro clique */
 function legenda(){
   const itens = [];
   for(let n = 1; n <= 10; n++){
-    itens.push(`<div class="legenda-item"><span class="legenda-cor" style="background:${corNivel(n)}"></span>${rotuloNivel(n)}</div>`);
+    const c = custoNivel(n);
+    const rot = c === 0 ? 'grátis' : (n >= 10 ? c + '+' : String(c)) + '🥚';
+    itens.push(`<div class="legenda-item"><span class="legenda-cor" style="background:${corNivel(n)}"></span>${rot}</div>`);
   }
   return `
     <div class="legenda">${itens.join('')}</div>
-    <p class="legenda-nota">toque no vocábulo para ver a tradução · nível 1 é grátis, nível 2 custa 1 ovo, nível 3 custa 2…</p>`;
+    <p class="legenda-nota">toque no vocábulo para ver a tradução · a cor indica quantos ovos custa (só na primeira vez)</p>`;
 }
 
-function listaTraducoes(pi){
-  const vocab = listaDe(P.paragrafos[pi].vocabulario);
-  const rev = P.revelados[pi] || {};
-  const itens = Object.keys(rev).map(Number).sort((a,b) => a - b).filter(k => vocab[k]).map(k => {
-    const v = vocab[k];
-    const custo = custoNivel(v.nivel);
-    const nova = P.ultima && P.ultima.p === pi && P.ultima.v === k;
-    return `
-      <div class="trad-item${nova ? ' nova' : ''}" style="--c:${corNivel(v.nivel)}">
-        <span><strong>${esc(v.termo)}</strong> — ${esc(v.traducao)}</span>
-        <span class="trad-custo">${custo > 0 ? '−' + custo + ' 🥚' : 'grátis'}</span>
-      </div>`;
-  });
-  return itens.length
-    ? `<div class="trad-lista">${itens.join('')}</div>`
-    : `<p class="trad-vazia">as traduções que você abrir aparecem aqui</p>`;
+/* =========================================================
+   BALÃO DE TRADUÇÃO — abre ao clicar na palavra; pode clicar
+   quantas vezes quiser (o custo em ovos é cobrado uma só vez)
+   ========================================================= */
+function fecharBalao(){
+  P.balao = null;
+  const b = document.getElementById('balao');
+  if(b) b.remove();
+  document.querySelectorAll('.voc.ativo').forEach(e => e.classList.remove('ativo'));
 }
+
+function abrirBalao(el, v, custoCobrado){
+  let b = document.getElementById('balao');
+  if(b) b.remove();
+  document.querySelectorAll('.voc.ativo').forEach(e => e.classList.remove('ativo'));
+  el.classList.add('ativo');
+  b = document.createElement('div');
+  b.id = 'balao';
+  b.className = 'balao';
+  b.style.setProperty('--c', corNivel(v.nivel));
+  b.innerHTML = `
+    <div class="balao-termo">${esc(v.termo)}</div>
+    <div class="balao-trad">${esc(v.traducao)}</div>
+    ${custoCobrado > 0 ? `<div class="balao-custo">−${custoCobrado} 🥚</div>` : ''}
+    <span class="balao-seta"></span>`;
+  document.body.appendChild(b);
+
+  /* posiciona acima da palavra (ou abaixo, se não couber), dentro da tela */
+  const r = el.getBoundingClientRect();
+  const bw = b.offsetWidth, bh = b.offsetHeight;
+  const vw = document.documentElement.clientWidth;
+  let left = r.left + r.width / 2 - bw / 2;
+  left = Math.max(8, Math.min(left, vw - bw - 8));
+  let topo = r.top - bh - 12;
+  let abaixo = false;
+  if(topo < 8){ topo = r.bottom + 12; abaixo = true; }
+  b.style.left = (left + window.scrollX) + 'px';
+  b.style.top  = (topo + window.scrollY) + 'px';
+  b.classList.toggle('abaixo', abaixo);
+  const seta = b.querySelector('.balao-seta');
+  const sx = Math.max(14, Math.min(bw - 14, r.left + r.width / 2 - left));
+  seta.style.left = sx + 'px';
+}
+
+/* clique fora de uma palavra ou do balão fecha o balão */
+document.addEventListener('click', e => {
+  if(!P.balao) return;
+  if(e.target.closest && (e.target.closest('.voc') || e.target.closest('#balao'))) return;
+  fecharBalao();
+});
 
 function cardParagrafo(){
   const total = P.paragrafos.length;
@@ -404,10 +435,6 @@ function cardParagrafo(){
       <div class="texto-par">${htmlTexto(P.par)}</div>
       ${legenda()}
     </div>
-    <div class="question-card" style="animation:none">
-      <p class="instruction" style="margin-bottom:8px">traduções reveladas</p>
-      ${listaTraducoes(P.par)}
-    </div>
     <div class="footer-space"></div>
     <div class="nav-par">
       ${P.par > 0 ? `<button class="btn btn-ghost" onclick="voltarParagrafo()">← voltar</button>` : ''}
@@ -416,31 +443,34 @@ function cardParagrafo(){
 }
 
 /* clique no vocábulo: revela a tradução e cobra os ovos (só na primeira vez) */
-function clicarVoc(vi){
+function clicarVoc(vi, el){
   if(!P.paragrafos || !P.id) return;
   const pi = P.par;
   const vocab = listaDe(P.paragrafos[pi].vocabulario);
   const v = vocab[vi];
   if(!v) return;
-  falar(v.termo);
+  falar(v.termo);                             // sem atraso
   if(!P.revelados[pi]) P.revelados[pi] = {};
   P.ultima = { p:pi, v:vi };
 
+  let cobrado = 0;
   if(!P.revelados[pi][vi]){
     const custo = custoNivel(v.nivel);
+    cobrado = custo;
     P.revelados[pi][vi] = true;
     P.ovos = Math.max(0, P.ovos - custo);
-    playSound('clicksuave');
     const up = {};
     up[`jogadores/${P.id}/ovos`] = P.ovos;
     up[`jogadores/${P.id}/revelados/${pi}/${vi}`] = true;
     try{ gameRef(P.pin).update(up); }catch(e){}
-  } else {
-    playSound('clicksuave');
+    if(el) el.classList.add('aberto');
+    renderTopbar();
+    const b = document.getElementById('ovosBadge');
+    if(b){ b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 450); }
   }
-  render();
-  const b = document.getElementById('ovosBadge');
-  if(b){ b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 450); }
+  playSound('clicksuave');
+  P.balao = { p:pi, v:vi };
+  if(el) abrirBalao(el, v, cobrado);
 }
 
 function voltarParagrafo(){
